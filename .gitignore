@@ -1,0 +1,14 @@
+node_modules/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+.env*
+.DS_Store
+coverage/
+dist/
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+receiver/config.json
+receiver/data/

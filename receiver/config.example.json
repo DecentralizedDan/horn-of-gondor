@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "source": {
+    "type": "synthetic",
+    "sampleIntervalMs": 100,
+    "synthetic": {
+      "realtime": true,
+      "repeat": true,
+      "segments": [
+        {
+          "durationMs": 2000,
+          "powerDbfs": -82
+        },
+        {
+          "durationMs": 1800,
+          "powerDbfs": -54
+        },
+        {
+          "durationMs": 1200,
+          "powerDbfs": -82
+        },
+        {
+          "durationMs": 3200,
+          "powerDbfs": -31
+        },
+        {
+          "durationMs": 2000,
+          "powerDbfs": -82
+        }
+      ]
+    },
+    "rtlFm": {
+      "executable": "rtl_fm",
+      "sampleRateHz": 48000,
+      "restartDelayMs": 2000,
+      "maximumRestartAttempts": 5
+    }
+  },
+  "radio": {
+    "deviceIndex": 0,
+    "frequencyHz": 146550000,
+    "gainDb": 28,
+    "ppmError": 0
+  },
+  "detection": {
+    "thresholdDbfs": -62,
+    "scoreRangeDb": 50,
+    "minimumDurationMs": 1000,
+    "endGraceMs": 500
+  },
+  "storage": {
+    "databasePath": "./data/receiver.sqlite",
+    "retentionDays": 180
+  },
+  "cloud": {
+    "enabled": false,
+    "apiBaseUrl": "http://localhost:8787",
+    "uploadToken": "",
+    "uploadIntervalMs": 5000,
+    "requestTimeoutMs": 10000,
+    "batchSize": 25
+  }
+}

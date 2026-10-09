@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "horn-of-gondor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-08",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "horn-of-gondor",
+      "database_id": "e236bedc-4550-48b6-8707-cfd50c9ce34b",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["17 4 * * *"]
+  }
+}

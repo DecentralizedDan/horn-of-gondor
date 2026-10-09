@@ -1,0 +1,20 @@
+{
+  "name": "@horn-of-gondor/receiver",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Raspberry Pi receiver service for Horn of Gondor.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "npm test",
+    "demo": "node src/cli.js --config config.example.json --once",
+    "start": "node src/cli.js --config config.json",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.4.1"
+  }
+}

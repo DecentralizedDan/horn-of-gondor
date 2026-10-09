@@ -1,0 +1,8 @@
+{
+  "chart": {
+    "minimumDurationSeconds": 1,
+    "maximumDurationSeconds": 30,
+    "minimumBarWidthPx": 4,
+    "maximumBarWidthPx": 18
+  }
+}

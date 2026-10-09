@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Live relative signal reports from the Horn of Gondor VHF receiver."
+    >
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="theme-color" content="#16271f">
+    <title>Horn of Gondor Signal Report</title>
+    <link rel="stylesheet" href="/styles.css?v=1">
+    <script src="/app.js?v=1" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">VHF signal report</p>
+        <h1>Horn of Gondor</h1>
+      </div>
+      <button id="refresh-button" class="refresh-button" type="button">
+        Refresh
+      </button>
+    </header>
+
+    <main>
+      <section class="latest-card" aria-labelledby="latest-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Most recent transmission</p>
+            <h2 id="latest-heading">Latest Signal</h2>
+          </div>
+          <p id="connection-status" class="status" aria-live="polite">
+            Loading…
+          </p>
+        </div>
+
+        <div id="empty-state" class="empty-state" hidden>
+          No transmissions have been received yet.
+        </div>
+
+        <div id="latest-result" hidden>
+          <div class="score-line">
+            <strong id="latest-score" class="score">0</strong>
+            <span class="score-suffix">/ 100</span>
+          </div>
+
+          <div
+            id="signal-meter"
+            class="signal-meter"
+            role="progressbar"
+            aria-label="Relative signal strength"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div id="signal-fill" class="signal-fill"></div>
+          </div>
+
+          <dl class="measurement-grid">
+            <div>
+              <dt>Peak</dt>
+              <dd id="latest-peak">—</dd>
+            </div>
+            <div>
+              <dt>Average</dt>
+              <dd id="latest-average">—</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd id="latest-duration">—</dd>
+            </div>
+            <div>
+              <dt>Frequency</dt>
+              <dd id="latest-frequency">—</dd>
+            </div>
+          </dl>
+
+          <p id="latest-time" class="latest-time"></p>
+        </div>
+      </section>
+
+      <section class="chart-section" aria-labelledby="chart-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Rolling signal history</p>
+            <h2 id="chart-heading">Last Ten Minutes</h2>
+          </div>
+        </div>
+
+        <div class="chart-key" aria-hidden="true">
+          <span>Height = peak dBFS</span>
+          <span class="score-key">
+            <span class="score-key-gradient"></span>
+            Color = score
+          </span>
+        </div>
+
+        <div class="chart-layout">
+          <div class="chart-y-axis" aria-hidden="true">
+            <span>0</span>
+            <span>−100</span>
+          </div>
+          <div>
+            <div
+              id="bar-chart"
+              class="bar-chart"
+              aria-label="Detected transmissions during the last ten minutes"
+            >
+              <div class="chart-grid" aria-hidden="true"></div>
+              <div id="chart-bars" class="chart-bars"></div>
+            </div>
+            <div class="chart-x-axis" aria-hidden="true">
+              <span>10 min ago</span>
+              <span>5 min</span>
+              <span>Now</span>
+            </div>
+          </div>
+        </div>
+
+        <p id="chart-empty" class="chart-empty" hidden>
+          No transmissions detected in the last ten minutes.
+        </p>
+        <p id="chart-detail" class="chart-detail" aria-live="polite">
+          Each bar shows one detected transmission.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      Relative readings are useful for comparisons but are not calibrated
+      S-meter measurements.
+    </footer>
+
+    <noscript>This page requires JavaScript to load signal reports.</noscript>
+  </body>
+</html>

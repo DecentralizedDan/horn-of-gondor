@@ -1,0 +1,181 @@
+# Horn of Gondor Receiver
+
+The receiver package runs on the Raspberry Pi. It supports both deterministic
+synthetic samples and live, channelized IQ samples from `rtl_fm`.
+
+For a fresh cloud-and-Pi deployment, see
+[the complete installation guide](../docs/installation.md).
+
+## Current Capabilities
+
+- Validated JSON configuration
+- Synthetic dBFS samples
+- Native `rtl_fm -M raw` process management
+- Signed 16-bit IQ decoding
+- 100 ms RF power measurements
+- Automatic `rtl_fm` restart after unexpected exits
+- Live noise calibration summaries
+- Threshold-based transmission detection
+- Configurable minimum duration and end grace period
+- Peak, average, duration, and relative-score calculation
+- Local SQLite storage
+- Idempotent cloud uploads
+- Exponential retry backoff
+- Local retention that never deletes unsynchronized events
+- Graceful `SIGINT` and `SIGTERM` handling
+
+The RTL-SDR source and end-to-end upload path have been verified with a live
+transmission on the Pi.
+
+## Configuration
+
+Copy the example before normal operation:
+
+```sh
+cp config.example.json config.json
+```
+
+`config.json` is ignored by Git. It contains private Pi and cloud settings,
+unlike the website's public `public/config.json`.
+
+Important receiver settings include:
+
+- `radio.frequencyHz`: VHF receive frequency
+- `radio.gainDb`: Fixed RTL-SDR tuner gain
+- `radio.ppmError`: RTL-SDR frequency correction
+- `source.rtlFm.sampleRateHz`: Channelized IQ sample rate
+- `source.rtlFm.restartDelayMs`: Delay before process recovery
+- `source.rtlFm.maximumRestartAttempts`: Consecutive startup failures allowed
+- `detection.thresholdDbfs`: Minimum accepted signal level
+- `detection.scoreRangeDb`: Signal range mapped from 0 to 100
+- `detection.minimumDurationMs`: Minimum accepted transmission duration
+- `detection.endGraceMs`: Below-threshold time that ends a transmission
+- `storage.retentionDays`: Local and cloud history retention
+- `cloud.apiBaseUrl`: Deployed Cloudflare service
+
+The upload token may be stored in `config.json`, but the recommended approach
+is an environment variable:
+
+```sh
+export HORN_OF_GONDOR_UPLOAD_TOKEN='replace-with-production-secret'
+```
+
+## Install on the Pi
+
+The package targets Node.js 20 or later. On Debian 13:
+
+```sh
+sudo apt update
+sudo apt install -y build-essential python3 rtl-sdr
+cd ~/horn-of-gondor/receiver
+npm ci
+```
+
+The compiler packages are a fallback if npm cannot download a prebuilt
+`better-sqlite3` binary for the Pi.
+
+## Test
+
+Run the automated tests:
+
+```sh
+npm test
+```
+
+Run one synthetic scenario:
+
+```sh
+npm run demo
+```
+
+The demonstration writes detected transmissions to `data/receiver.sqlite`.
+Cloud uploads are disabled in `config.example.json`.
+
+## Run Continuously
+
+After copying and editing the configuration:
+
+```sh
+npm start
+```
+
+The example synthetic scenario repeats until interrupted. Press `Ctrl+C` for a
+graceful shutdown.
+
+## Use the RTL-SDR
+
+In `config.json`, change:
+
+```json
+"type": "rtl_fm"
+```
+
+Keep automatic gain control disabled by retaining a fixed `radio.gainDb`.
+The initial configuration uses:
+
+- 146.550 MHz
+- 28 dB tuner gain
+- 48,000 channelized IQ samples per second
+- 100 ms measurement windows
+
+Confirm that the selected frequency is appropriate for local simplex use
+before transmitting.
+
+## Calibrate the Noise Threshold
+
+With the antenna connected and no deliberate test transmissions:
+
+```sh
+timeout 60 node src/cli.js --config config.json --calibrate
+```
+
+The receiver prints minimum, median, 95th-percentile, and maximum dBFS values
+once per second. Begin with `detection.thresholdDbfs` approximately 6 dB above
+the stable noise level, then adjust based on false detections and missed
+signals.
+
+These dBFS values are relative to the fixed `rtl_fm` processing chain. They
+are useful for repeatable comparisons but are not calibrated receiver input
+power or S-units.
+
+The IQ format and processing assumptions follow the
+[Debian `rtl_fm` manual](https://manpages.debian.org/trixie/rtl-sdr/rtl_fm.1.en.html)
+and [Osmocom `rtl_fm` source](https://github.com/osmocom/rtl-sdr/blob/master/src/rtl_fm.c).
+
+## Run With Live IQ
+
+After calibration:
+
+```sh
+node src/cli.js --config config.json
+```
+
+Press `Ctrl+C` for a graceful shutdown.
+
+## Install the System Service
+
+Stop any manually running receiver with `Ctrl+C`, then run:
+
+```sh
+cd ~/horn-of-gondor/receiver
+sudo bash deploy/install-systemd.sh
+```
+
+On its first run, the installer securely prompts for the cloud upload token.
+It stores the token in `/etc/horn-of-gondor/receiver.env` with permissions
+that allow only root to read it. The token is not included in the service
+definition or command line.
+
+The installer enables and immediately starts
+`horn-of-gondor-receiver.service`. Common operations are:
+
+```sh
+sudo systemctl status horn-of-gondor-receiver
+sudo systemctl restart horn-of-gondor-receiver
+sudo systemctl stop horn-of-gondor-receiver
+sudo journalctl -u horn-of-gondor-receiver -f
+```
+
+After changing `config.json`, restart the service to apply the new settings.
+After rotating the cloud token, edit
+`/etc/horn-of-gondor/receiver.env` with `sudo vim` and restart the service.
