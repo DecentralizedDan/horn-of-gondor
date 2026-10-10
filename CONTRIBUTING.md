@@ -18,6 +18,8 @@ Pi setup.
 ## Pull Requests
 
 - Keep changes focused and explain how they were tested.
+  - Changes should be as small and compartmentalized as possible.
+  - Giant changes will be ignored.
 - Add or update tests when behavior changes.
 - Run `npm run check` before submitting.
 - Update documentation when configuration, installation, or operation changes.

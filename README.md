@@ -204,6 +204,13 @@ site stores no audio and no receiver location.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull-request
 guidance. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
 
+## AI-Assisted Development
+
+I am a software engineer with 10 years experience writing code. Everything
+in Horn of Gondor was written using AI tools under my direction. I
+chose to use AI because it was way faster and easier than learning how
+to do this from scratch.
+
 ## License
 
 [MIT](LICENSE)
