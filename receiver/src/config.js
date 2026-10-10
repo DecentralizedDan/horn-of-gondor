@@ -199,6 +199,61 @@ export function validateConfig(
     }
   }
 
+  if (
+    input.recording !== undefined &&
+    !isObject(input.recording)
+  ) {
+    errors.push("recording must be an object.");
+  } else if (isObject(input.recording)) {
+    if (
+      input.recording.enabled !== undefined &&
+      typeof input.recording.enabled !== "boolean"
+    ) {
+      errors.push("recording.enabled must be a boolean.");
+    }
+    if (!integerInRange(input.recording.retentionDays, 1, 3_650)) {
+      errors.push(
+        "recording.retentionDays must be an integer from 1 through 3650.",
+      );
+    }
+    if (
+      input.recording.maximumDurationSeconds !== undefined &&
+      !integerInRange(
+        input.recording.maximumDurationSeconds,
+        1,
+        30,
+      )
+    ) {
+      errors.push(
+        "recording.maximumDurationSeconds must be an integer from 1 through 30.",
+      );
+    }
+    if (
+      input.recording.directory !== undefined &&
+      (typeof input.recording.directory !== "string" ||
+        input.recording.directory.trim() === "")
+    ) {
+      errors.push("recording.directory must be a nonempty string.");
+    }
+  }
+  if (input.recording?.enabled === true) {
+    if (input.source?.type !== "rtl_fm") {
+      errors.push(
+        'recording.enabled requires source.type to be "rtl_fm".',
+      );
+    }
+    const rtlSampleRate = input.source?.rtlFm?.sampleRateHz;
+    if (
+      !Number.isInteger(rtlSampleRate) ||
+      rtlSampleRate < 16_000 ||
+      rtlSampleRate % 16_000 !== 0
+    ) {
+      errors.push(
+        "recording requires source.rtlFm.sampleRateHz to be a multiple of 16000.",
+      );
+    }
+  }
+
   if (!isObject(input.cloud)) {
     errors.push("cloud must be an object.");
   } else {
@@ -297,6 +352,16 @@ export function validateConfig(
     storage: {
       databasePath: path.resolve(configDirectory, input.storage.databasePath),
       retentionDays: input.storage.retentionDays,
+    },
+    recording: {
+      enabled: input.recording?.enabled ?? false,
+      retentionDays: input.recording?.retentionDays ?? 1,
+      maximumDurationSeconds:
+        input.recording?.maximumDurationSeconds ?? 10,
+      directory: path.resolve(
+        configDirectory,
+        input.recording?.directory ?? "./data/audio",
+      ),
     },
     cloud: {
       enabled: input.cloud.enabled,

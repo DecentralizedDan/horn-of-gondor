@@ -78,8 +78,17 @@ export class TransmissionDetector {
     return this.active ? this.finishTransmission() : null;
   }
 
+  get isActive() {
+    return this.active !== null;
+  }
+
+  get activeEventId() {
+    return this.active?.eventId ?? null;
+  }
+
   startTransmission(timestampMs, powerDbfs) {
     this.active = {
+      eventId: this.createEventId(),
       startedAtMs: timestampMs,
       lastAboveMs: timestampMs,
       belowSinceMs: null,
@@ -105,7 +114,7 @@ export class TransmissionDetector {
     );
 
     return {
-      eventId: this.createEventId(),
+      eventId: active.eventId,
       startedAt: new Date(active.startedAtMs).toISOString(),
       durationMs,
       peakDbfs,

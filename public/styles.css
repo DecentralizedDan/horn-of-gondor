@@ -336,6 +336,20 @@ dd {
   line-height: 1.4;
 }
 
+.chart-audio-panel {
+  margin: 0.8rem 0 0 2.9rem;
+}
+
+.chart-audio-panel audio {
+  width: 100%;
+}
+
+.chart-audio-note {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .chart-empty {
   color: var(--text);
 }

@@ -30,6 +30,10 @@ function rowToTransmission(row: TransmissionRow): Transmission {
     gainDb: row.gain_db,
     thresholdDbfs: row.threshold_dbfs,
     receiverVersion: row.receiver_version,
+    audioAvailable: row.audio_available === 1,
+    audioContentType: row.audio_content_type,
+    audioSizeBytes: row.audio_size_bytes,
+    audioDurationMs: row.audio_duration_ms,
     receivedAt: new Date(row.received_at_ms).toISOString(),
   };
 }
@@ -48,7 +52,11 @@ function rowMatchesInput(
     row.frequency_hz === input.frequencyHz &&
     row.gain_db === input.gainDb &&
     row.threshold_dbfs === input.thresholdDbfs &&
-    row.receiver_version === input.receiverVersion
+    row.receiver_version === input.receiverVersion &&
+    row.audio_available === (input.audioAvailable ? 1 : 0) &&
+    row.audio_content_type === (input.audioContentType ?? null) &&
+    row.audio_size_bytes === (input.audioSizeBytes ?? null) &&
+    row.audio_duration_ms === (input.audioDurationMs ?? null)
   );
 }
 
@@ -101,8 +109,9 @@ export async function insertTransmission(
       `INSERT OR IGNORE INTO transmissions (
         event_id, started_at_ms, duration_ms, peak_dbfs, average_dbfs,
         score, frequency_hz, gain_db, threshold_dbfs, receiver_version,
-        received_at_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        audio_available, audio_content_type, audio_size_bytes,
+        audio_duration_ms, received_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       input.eventId,
@@ -115,6 +124,10 @@ export async function insertTransmission(
       input.gainDb,
       input.thresholdDbfs,
       input.receiverVersion,
+      input.audioAvailable ? 1 : 0,
+      input.audioContentType ?? null,
+      input.audioSizeBytes ?? null,
+      input.audioDurationMs ?? null,
       now,
     )
     .run();
@@ -155,6 +168,17 @@ export async function getLatestTransmission(
     )
     .first<TransmissionRow>();
 
+  return row ? rowToTransmission(row) : null;
+}
+
+export async function getTransmissionById(
+  db: D1Database,
+  eventId: string,
+): Promise<Transmission | null> {
+  const row = await db
+    .prepare("SELECT * FROM transmissions WHERE event_id = ?")
+    .bind(eventId)
+    .first<TransmissionRow>();
   return row ? rowToTransmission(row) : null;
 }
 
@@ -216,32 +240,45 @@ export async function listTransmissions(
 export async function updateRetention(
   db: D1Database,
   retentionDays: number,
+  audioRetentionDays: number,
   now = Date.now(),
-): Promise<{ retentionDays: number; updatedAt: string }> {
+): Promise<{
+  retentionDays: number;
+  audioRetentionDays: number;
+  updatedAt: string;
+}> {
   await db
     .prepare(
-      `INSERT INTO settings (id, retention_days, updated_at_ms)
-       VALUES (1, ?, ?)
+      `INSERT INTO settings (
+         id, retention_days, audio_retention_days, updated_at_ms
+       )
+       VALUES (1, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          retention_days = excluded.retention_days,
+         audio_retention_days = excluded.audio_retention_days,
          updated_at_ms = excluded.updated_at_ms`,
     )
-    .bind(retentionDays, now)
+    .bind(retentionDays, audioRetentionDays, now)
     .run();
 
   return {
     retentionDays,
+    audioRetentionDays,
     updatedAt: new Date(now).toISOString(),
   };
 }
 
 export async function deleteExpiredTransmissions(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB" | "AUDIO">,
   now = Date.now(),
 ): Promise<number> {
   const setting = await env.DB.prepare(
-    "SELECT retention_days FROM settings WHERE id = 1",
-  ).first<{ retention_days: number }>();
+    `SELECT retention_days, audio_retention_days
+     FROM settings WHERE id = 1`,
+  ).first<{
+    retention_days: number;
+    audio_retention_days: number;
+  }>();
 
   const storedRetentionDays = setting?.retention_days;
   const retentionDays =
@@ -252,6 +289,63 @@ export async function deleteExpiredTransmissions(
       ? storedRetentionDays
       : 180;
   const cutoff = now - retentionDays * 86_400_000;
+  const storedAudioRetentionDays = setting?.audio_retention_days;
+  const audioRetentionDays =
+    Number.isInteger(storedAudioRetentionDays) &&
+    storedAudioRetentionDays !== undefined &&
+    storedAudioRetentionDays >= 1 &&
+    storedAudioRetentionDays <= 3_650
+      ? storedAudioRetentionDays
+      : 1;
+  const audioCutoff = now - audioRetentionDays * 86_400_000;
+
+  const audioKeys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.AUDIO.list({ cursor });
+    for (const object of page.objects) {
+      if (
+        object.key.startsWith("audio/") &&
+        object.uploaded.getTime() < audioCutoff
+      ) {
+        audioKeys.push(object.key);
+      }
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  for (let index = 0; index < audioKeys.length; index += 1_000) {
+    await env.AUDIO.delete(audioKeys.slice(index, index + 1_000));
+  }
+  const expiredEventIds = audioKeys
+    .map((key) => key.match(/^audio\/([0-9a-f-]+)\.wav$/)?.[1])
+    .filter((eventId): eventId is string => Boolean(eventId));
+  for (let index = 0; index < expiredEventIds.length; index += 100) {
+    await env.DB.batch(
+      expiredEventIds.slice(index, index + 100).map((eventId) =>
+        env.DB
+          .prepare(
+            `UPDATE transmissions
+             SET audio_available = 0,
+                 audio_content_type = NULL,
+                 audio_size_bytes = NULL,
+                 audio_duration_ms = NULL
+             WHERE event_id = ?`,
+          )
+          .bind(eventId),
+      ),
+    );
+  }
+  await env.DB.prepare(
+    `UPDATE transmissions
+     SET audio_available = 0,
+         audio_content_type = NULL,
+         audio_size_bytes = NULL,
+         audio_duration_ms = NULL
+     WHERE audio_available = 1 AND received_at_ms < ?`,
+  )
+    .bind(audioCutoff)
+    .run();
 
   const result = await env.DB.prepare(
     "DELETE FROM transmissions WHERE started_at_ms < ?",

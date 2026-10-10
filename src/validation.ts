@@ -14,6 +14,7 @@ const UUID_V4 =
 
 const RFC3339_MILLISECONDS =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const MAX_AUDIO_BYTES = 2 * 1_024 * 1_024;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -135,16 +136,70 @@ export function validateTransmission(
     });
   }
 
+  const audioAvailable = input.audioAvailable === true;
+  if (
+    input.audioAvailable !== undefined &&
+    typeof input.audioAvailable !== "boolean"
+  ) {
+    details.push({
+      field: "audioAvailable",
+      message: "Must be a boolean when supplied.",
+    });
+  }
+  if (audioAvailable) {
+    if (input.audioContentType !== "audio/wav") {
+      details.push({
+        field: "audioContentType",
+        message: 'Must be "audio/wav" when audio is available.',
+      });
+    }
+    if (!isIntegerInRange(input.audioSizeBytes, 44, MAX_AUDIO_BYTES)) {
+      details.push({
+        field: "audioSizeBytes",
+        message: `Must be an integer from 44 through ${MAX_AUDIO_BYTES}.`,
+      });
+    }
+    if (
+      !isIntegerInRange(input.audioDurationMs, 1, 30_000) ||
+      (isIntegerInRange(input.durationMs, 1_000, 3_600_000) &&
+        input.audioDurationMs > input.durationMs)
+    ) {
+      details.push({
+        field: "audioDurationMs",
+        message:
+          "Must be from 1 through 30000 and no longer than the transmission.",
+      });
+    }
+  }
+
   if (details.length > 0) {
     return { ok: false, details };
   }
 
-  return { ok: true, value: input as unknown as TransmissionInput };
+  return {
+    ok: true,
+    value: {
+      ...(input as unknown as TransmissionInput),
+      audioAvailable,
+      audioContentType: audioAvailable
+        ? (input.audioContentType as string)
+        : null,
+      audioSizeBytes: audioAvailable
+        ? (input.audioSizeBytes as number)
+        : null,
+      audioDurationMs: audioAvailable
+        ? (input.audioDurationMs as number)
+        : null,
+    },
+  };
 }
 
 export function validateSettings(
   input: unknown,
-): ValidationResult<{ retentionDays: number }> {
+): ValidationResult<{
+  retentionDays: number;
+  audioRetentionDays: number;
+}> {
   if (!isObject(input)) {
     return {
       ok: false,
@@ -152,17 +207,35 @@ export function validateSettings(
     };
   }
 
+  const details: ValidationDetail[] = [];
   if (!isIntegerInRange(input.retentionDays, 1, 3_650)) {
+    details.push({
+      field: "retentionDays",
+      message: "Must be an integer from 1 through 3650.",
+    });
+  }
+  if (
+    input.audioRetentionDays !== undefined &&
+    !isIntegerInRange(input.audioRetentionDays, 1, 3_650)
+  ) {
+    details.push({
+      field: "audioRetentionDays",
+      message: "Must be an integer from 1 through 3650.",
+    });
+  }
+  if (details.length > 0) {
     return {
       ok: false,
-      details: [
-        {
-          field: "retentionDays",
-          message: "Must be an integer from 1 through 3650.",
-        },
-      ],
+      details,
     };
   }
 
-  return { ok: true, value: { retentionDays: input.retentionDays } };
+  return {
+    ok: true,
+    value: {
+      retentionDays: input.retentionDays as number,
+      audioRetentionDays:
+        (input.audioRetentionDays as number | undefined) ?? 1,
+    },
+  };
 }

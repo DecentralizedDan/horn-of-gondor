@@ -19,6 +19,8 @@ Base path: `/api/v1`
 - Durations use integer milliseconds.
 - Frequencies use integer hertz.
 - Signal levels use dBFS and are relative, not calibrated S-units.
+- Audio is uploaded before event metadata so every event advertised as
+  playable already has its WAV object in R2.
 - Public list results are ordered from newest to oldest.
 - The browser polls the latest-result endpoint every five seconds.
 
@@ -37,6 +39,10 @@ A transmission has these fields:
 - `gainDb`: Configured fixed RTL-SDR gain in decibels.
 - `thresholdDbfs`: Configured signal-detection threshold in dBFS.
 - `receiverVersion`: Version of the Pi receiver software that produced the measurement.
+- `audioAvailable`: Whether public playback is available.
+- `audioContentType`: `audio/wav` when audio is available; otherwise `null`.
+- `audioSizeBytes`: WAV size when audio is available; otherwise `null`.
+- `audioDurationMs`: Recorded excerpt duration when audio is available; otherwise `null`.
 - `receivedAt`: Server-generated RFC 3339 UTC timestamp. This field appears in responses but is not supplied by the Pi.
 
 Example public resource:
@@ -52,7 +58,11 @@ Example public resource:
   "frequencyHz": 146550000,
   "gainDb": 28.0,
   "thresholdDbfs": -62.0,
-  "receiverVersion": "0.2.0",
+  "receiverVersion": "0.3.0",
+  "audioAvailable": true,
+  "audioContentType": "audio/wav",
+  "audioSizeBytes": 140204,
+  "audioDurationMs": 4380,
   "receivedAt": "2026-10-09T00:31:47.019Z"
 }
 ```
@@ -70,6 +80,10 @@ The service rejects a transmission unless:
 - `frequencyHz` is an integer from `144000000` through `148000000`.
 - `gainDb` is a finite number from `0` through `60`.
 - `receiverVersion` is a nonempty string no longer than 50 characters.
+- `audioAvailable` is a boolean when supplied and defaults to `false`.
+- When audio is available, its content type is `audio/wav`, its size is from
+  44 bytes through 2 MiB, and its duration is from 1 through 30,000 ms without
+  exceeding the transmission duration.
 - The JSON request body is no larger than 16 KiB.
 
 The receiver calculates average strength from above-threshold samples. Samples
@@ -113,6 +127,27 @@ The Cloudflare Worker stores the expected value as an encrypted Worker secret. T
 
 Public `GET` endpoints do not require authentication. Authenticated endpoints do not enable cross-origin browser requests.
 
+## Upload Transmission Audio
+
+`PUT /api/v1/transmissions/:eventId/audio`
+
+Authentication: required.
+
+The path event ID must be a UUID v4. The request body is a RIFF/WAVE file with
+`Content-Type: audio/wav` and a maximum size of 2 MiB. A successful upload
+returns `201 Created`:
+
+```json
+{
+  "data": {
+    "eventId": "3157bbbf-7208-4873-9c1c-e99965a0d6c4",
+    "sizeBytes": 140204
+  }
+}
+```
+
+The receiver must complete this upload before creating the transmission.
+
 ## Create a Transmission
 
 `POST /api/v1/transmissions`
@@ -132,9 +167,16 @@ Request body:
   "frequencyHz": 146550000,
   "gainDb": 28.0,
   "thresholdDbfs": -62.0,
-  "receiverVersion": "0.2.0"
+  "receiverVersion": "0.3.0",
+  "audioAvailable": true,
+  "audioContentType": "audio/wav",
+  "audioSizeBytes": 140204,
+  "audioDurationMs": 4380
 }
 ```
+
+If `audioAvailable` is true but the matching R2 object is absent or does not
+match the declared size and type, the service returns `400 audio_not_found`.
 
 New event response: `201 Created`
 
@@ -229,6 +271,17 @@ Response: `200 OK`
 
 The cursor encodes the last item's `startedAt` and `eventId`, but clients must treat it as opaque. When `since` and `cursor` are combined, the lower time boundary applies to every page.
 
+## Play Transmission Audio
+
+`GET /api/v1/transmissions/:eventId/audio`
+
+Authentication: none.
+
+When the event and its WAV object exist, the service returns `200 OK` with
+`Content-Type: audio/wav`, a content length, an ETag, and a five-minute public
+browser-cache lifetime. Missing or expired audio returns `404 not_found`.
+Range requests are not currently supported; clips are intentionally bounded.
+
 ## Update Retention Settings
 
 `PUT /api/v1/settings`
@@ -243,11 +296,13 @@ Request body:
 
 ```json
 {
-  "retentionDays": 180
+  "retentionDays": 180,
+  "audioRetentionDays": 1
 }
 ```
 
-`retentionDays` must be an integer from `1` through `3650`.
+Both values must be integers from `1` through `3650`.
+`audioRetentionDays` defaults to `1` for older clients that omit it.
 
 Response: `200 OK`
 
@@ -255,12 +310,18 @@ Response: `200 OK`
 {
   "data": {
     "retentionDays": 180,
+    "audioRetentionDays": 1,
     "updatedAt": "2026-10-09T00:30:00.000Z"
   }
 }
 ```
 
-The service uses 180 days until the Pi first updates this setting. A daily Cloudflare Cron Trigger deletes expired cloud records. The Pi independently applies the same configured period to synchronized local records. Unsynchronized records must not be deleted merely because they reached the retention age.
+The service uses 180 days for records and one day for audio until the Pi first
+updates these settings. A daily Cloudflare Cron Trigger deletes expired
+records, expired R2 objects, and orphaned audio uploads. Audio metadata is
+cleared independently when its object expires. The Pi independently applies
+record retention to synchronized local records. Unsynchronized records must
+not be deleted merely because they reached the retention age.
 
 ## Error Format
 
@@ -283,7 +344,8 @@ Errors use this JSON structure:
 
 Supported status codes and stable error codes:
 
-- `400 Bad Request`: `invalid_json`, `validation_error`, or `invalid_cursor`
+- `400 Bad Request`: `invalid_json`, `validation_error`, `invalid_cursor`, or
+  `audio_not_found`
 - `401 Unauthorized`: `unauthorized`
 - `404 Not Found`: `not_found`
 - `405 Method Not Allowed`: `method_not_allowed`
@@ -314,6 +376,9 @@ The implementation uses:
 - A `transmissions` table keyed by `event_id`.
 - An index ordered by `started_at` and `event_id` for deterministic history pagination.
 - A singleton `settings` row containing `retention_days` and its update timestamp.
+- Optional audio metadata on each transmission and
+  `settings.audio_retention_days`.
+- R2 objects at `audio/<eventId>.wav`; audio bytes are never stored in D1.
 - Integer epoch milliseconds internally for timestamps where useful.
 - Server-generated `received_at` values.
 

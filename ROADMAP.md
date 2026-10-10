@@ -80,26 +80,41 @@ Status: In progress; automatic startup verified on the Pi
 - Document installation, configuration, calibration, operation, and recovery.
 - Add release packaging and versioning.
 
-## Future Iteration — Transmission Recording and Playback
+## Phase 7 — Transmission Recording and Playback
 
-Status: Deferred until after the MVP
+Status: Feature complete; deployed Raspberry Pi audio validation in progress
 
-Website users will be able to select a transmission bar and play back a
-recording of that transmission.
+Website users can select a transmission bar and play back a recording of that
+transmission.
 
-This iteration will require:
+Implemented:
 
-- Record audio only for accepted transmission events.
+- Demodulate 16 kHz mono FM audio while measuring the RTL-SDR IQ stream.
+- Keep only the configurable opening excerpt, defaulting to ten seconds.
+- Trim the final 250 ms from complete recordings to suppress the receiver
+  squelch “kerchunk,” while leaving capped excerpts at their full length.
+- Apply short edge fades and normalize clips to approximately -18 dBFS RMS
+  with a -1 dBFS soft limiter.
 - Associate each audio clip with its transmission event.
-- Encode clips in a browser-compatible, bandwidth-efficient format.
-- Upload clips after their event metadata is stored safely.
-- Store audio in object storage rather than D1.
+- Write browser-compatible PCM WAV without requiring a Pi-side encoder.
+- Upload clips before event metadata so every published audio bar is playable.
+- Store audio in Cloudflare R2 rather than D1.
 - Add authenticated uploads and public read-only playback URLs.
 - Add accessible playback controls to each chart bar.
-- Define audio retention separately from measurement retention.
-- Set storage and bandwidth limits to control cost.
+- Retain audio for one day by default, independently configurable through
+  `recording.retentionDays`.
 - Handle interrupted recordings and uploads without corrupting event history.
-- Document privacy, legal, moderation, and abuse considerations before enabling
-  public playback.
 
-Audio recording, upload, and playback remain explicitly outside the MVP.
+Remaining:
+
+- Validate received voice quality with the real RTL-SDR and antenna.
+- Measure Raspberry Pi 3 B+ CPU temperature, throttling, and missed samples.
+- Test back-to-back transmissions, offline audio queues, and one-day cleanup.
+- Revisit compressed audio only if measured R2 egress or storage warrants the
+  additional Pi CPU and deployment complexity.
+
+## Future Quality-of-Life Improvements
+
+- Accept the configured receive frequency in MHz instead of requiring integer
+  hertz. Replace `radio.frequencyHz` with `radio.frequencyMhz`; for example,
+  configure 145 MHz as `145.000`.

@@ -49,6 +49,7 @@ export class RtlFmSignalSource {
     restartDelayMs,
     maximumRestartAttempts,
     radio,
+    audioSampleRateHz = null,
     spawnProcess = spawn,
     wait = delay,
     clock = Date.now,
@@ -60,6 +61,7 @@ export class RtlFmSignalSource {
     this.restartDelayMs = restartDelayMs;
     this.maximumRestartAttempts = maximumRestartAttempts;
     this.radio = radio;
+    this.audioSampleRateHz = audioSampleRateHz;
     this.spawnProcess = spawnProcess;
     this.wait = wait;
     this.clock = clock;
@@ -74,6 +76,7 @@ export class RtlFmSignalSource {
       const decoder = new IqPowerDecoder({
         sampleRateHz: this.sampleRateHz,
         windowMs: this.sampleIntervalMs,
+        audioSampleRateHz: this.audioSampleRateHz,
       });
       const arguments_ = buildRtlFmArguments({
         ...this.radio,
@@ -112,7 +115,11 @@ export class RtlFmSignalSource {
       try {
         try {
           for await (const chunk of child.stdout) {
-            for (const powerDbfs of decoder.push(chunk)) {
+            for (const decoded of decoder.push(chunk)) {
+              const powerDbfs =
+                typeof decoded === "number"
+                  ? decoded
+                  : decoded.powerDbfs;
               producedSamples += 1;
               const measuredStartMs = this.clock() - this.sampleIntervalMs;
               nextTimestampMs =
@@ -123,6 +130,10 @@ export class RtlFmSignalSource {
               yield {
                 timestampMs: Math.round(nextTimestampMs),
                 powerDbfs: roundPower(powerDbfs),
+                audioPcm:
+                  typeof decoded === "number"
+                    ? null
+                    : decoded.audioPcm,
               };
               nextTimestampMs += this.sampleIntervalMs;
             }

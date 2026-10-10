@@ -12,6 +12,9 @@ const DEFAULT_CHART_CONFIG = {
 
 const elements = {
   average: document.querySelector("#latest-average"),
+  chartAudio: document.querySelector("#chart-audio"),
+  chartAudioNote: document.querySelector("#chart-audio-note"),
+  chartAudioPanel: document.querySelector("#chart-audio-panel"),
   chartBars: document.querySelector("#chart-bars"),
   chartDetail: document.querySelector("#chart-detail"),
   chartEmpty: document.querySelector("#chart-empty"),
@@ -228,6 +231,9 @@ function renderChart(now = Date.now()) {
         eventPeriodLabel,
         `peak ${formatDbfs(transmission.peakDbfs)}`,
         `score ${transmission.score} out of 100`,
+        transmission.audioAvailable
+          ? "select to play audio"
+          : "audio unavailable",
       ].join(", ");
       bar.setAttribute("aria-label", label);
       bar.title = label;
@@ -241,6 +247,22 @@ function renderChart(now = Date.now()) {
           `Score ${transmission.score}/100`,
           `Duration ${formatDuration(transmission.durationMs)}`,
         ].join(" · ");
+        if (transmission.audioAvailable) {
+          const source = `/api/v1/transmissions/${encodeURIComponent(transmission.eventId)}/audio`;
+          if (elements.chartAudio.getAttribute("src") !== source) {
+            elements.chartAudio.src = source;
+          }
+          elements.chartAudioPanel.hidden = false;
+          elements.chartAudioNote.textContent =
+            transmission.audioDurationMs < transmission.durationMs
+              ? `Playback contains the first ${formatDuration(transmission.audioDurationMs)} of this transmission.`
+              : "Playback contains the complete transmission.";
+        } else {
+          elements.chartAudio.pause();
+          elements.chartAudio.removeAttribute("src");
+          elements.chartAudio.load();
+          elements.chartAudioPanel.hidden = true;
+        }
       };
       bar.addEventListener("click", showDetails);
       bar.addEventListener("keydown", (event) => {
@@ -267,6 +289,7 @@ function renderChart(now = Date.now()) {
   if (!hasResults) {
     elements.chartDetail.textContent =
       "Each bar shows one detected transmission.";
+    elements.chartAudioPanel.hidden = true;
   }
 }
 

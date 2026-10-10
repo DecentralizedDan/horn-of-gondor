@@ -27,6 +27,13 @@ test("validates and normalizes the example configuration", async () => {
   });
 
   assert.equal(config.detection.scoreRangeDb, 50);
+  assert.equal(config.recording.retentionDays, 1);
+  assert.equal(config.recording.enabled, false);
+  assert.equal(config.recording.maximumDurationSeconds, 10);
+  assert.equal(
+    config.recording.directory,
+    path.resolve("/tmp/horn-of-gondor", "./data/audio"),
+  );
   assert.equal(
     config.storage.databasePath,
     path.resolve("/tmp/horn-of-gondor", "./data/receiver.sqlite"),
@@ -34,6 +41,25 @@ test("validates and normalizes the example configuration", async () => {
   assert.equal(
     config.cloud.uploadToken,
     "test-token-with-at-least-32-characters",
+  );
+});
+
+test("defaults audio retention and validates configured days", async () => {
+  const input = await exampleConfig();
+  delete input.recording;
+  assert.equal(
+    validateConfig(input).recording.retentionDays,
+    1,
+  );
+
+  input.recording = { retentionDays: 0 };
+  assert.throws(
+    () => validateConfig(input),
+    (error) =>
+      error instanceof ConfigurationError &&
+      error.details.some((detail) =>
+        detail.includes("recording.retentionDays"),
+      ),
   );
 });
 
@@ -108,4 +134,21 @@ test("validates RTL-FM source settings", async () => {
 
   input.source.rtlFm.sampleRateHz = 48_001;
   assert.throws(() => validateConfig(input), ConfigurationError);
+});
+
+test("requires compatible RTL-FM input when recording is enabled", async () => {
+  const input = await exampleConfig();
+  input.recording.enabled = true;
+
+  assert.throws(
+    () => validateConfig(input),
+    (error) =>
+      error instanceof ConfigurationError &&
+      error.details.some((detail) =>
+        detail.includes('requires source.type to be "rtl_fm"'),
+      ),
+  );
+
+  input.source.type = "rtl_fm";
+  assert.doesNotThrow(() => validateConfig(input));
 });

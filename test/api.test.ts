@@ -10,6 +10,10 @@ beforeEach(async () => {
   await env.DB.prepare(
     "UPDATE settings SET retention_days = 180, updated_at_ms = 0 WHERE id = 1",
   ).run();
+  const audio = await env.AUDIO.list();
+  if (audio.objects.length > 0) {
+    await env.AUDIO.delete(audio.objects.map(({ key }) => key));
+  }
 });
 
 function transmission(
@@ -42,6 +46,28 @@ async function postTransmission(
     },
     body: JSON.stringify(event),
   });
+}
+
+function waveFile(): ArrayBuffer {
+  const buffer = new ArrayBuffer(44);
+  const wave = new Uint8Array(buffer);
+  wave.set(new TextEncoder().encode("RIFF"), 0);
+  wave.set(new TextEncoder().encode("WAVE"), 8);
+  return buffer;
+}
+
+async function putAudio(eventId: string): Promise<Response> {
+  return SELF.fetch(
+    `https://example.com/api/v1/transmissions/${eventId}/audio`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: AUTHORIZATION,
+        "Content-Type": "audio/wav",
+      },
+      body: waveFile(),
+    },
+  );
 }
 
 describe("Horn of Gondor API", () => {
@@ -268,6 +294,71 @@ describe("Horn of Gondor API", () => {
     await expect(response.json()).resolves.toMatchObject({
       data: {
         retentionDays: 90,
+        audioRetentionDays: 1,
+      },
+    });
+  });
+
+  it("publishes audio only after the object is uploaded", async () => {
+    const event = transmission({
+      audioAvailable: true,
+      audioContentType: "audio/wav",
+      audioSizeBytes: 44,
+      audioDurationMs: 1_000,
+    });
+
+    const missingAudio = await postTransmission(event);
+    expect(missingAudio.status).toBe(400);
+    await expect(missingAudio.json()).resolves.toMatchObject({
+      error: { code: "audio_not_found" },
+    });
+
+    expect((await putAudio(event.eventId)).status).toBe(201);
+    expect((await postTransmission(event)).status).toBe(201);
+
+    const playback = await SELF.fetch(
+      `https://example.com/api/v1/transmissions/${event.eventId}/audio`,
+    );
+    expect(playback.status).toBe(200);
+    expect(playback.headers.get("Content-Type")).toBe("audio/wav");
+    expect((await playback.arrayBuffer()).byteLength).toBe(44);
+
+    const latest = await SELF.fetch(
+      "https://example.com/api/v1/transmissions/latest",
+    );
+    await expect(latest.json()).resolves.toMatchObject({
+      data: {
+        eventId: event.eventId,
+        audioAvailable: true,
+        audioDurationMs: 1_000,
+      },
+    });
+  });
+
+  it("expires audio independently while retaining measurements", async () => {
+    const event = transmission({
+      audioAvailable: true,
+      audioContentType: "audio/wav",
+      audioSizeBytes: 44,
+      audioDurationMs: 1_000,
+    });
+    expect((await putAudio(event.eventId)).status).toBe(201);
+    expect((await postTransmission(event)).status).toBe(201);
+
+    await deleteExpiredTransmissions(env, Date.now() + 2 * 86_400_000);
+
+    const playback = await SELF.fetch(
+      `https://example.com/api/v1/transmissions/${event.eventId}/audio`,
+    );
+    expect(playback.status).toBe(404);
+
+    const latest = await SELF.fetch(
+      "https://example.com/api/v1/transmissions/latest",
+    );
+    await expect(latest.json()).resolves.toMatchObject({
+      data: {
+        eventId: event.eventId,
+        audioAvailable: false,
       },
     });
   });

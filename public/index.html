@@ -10,8 +10,8 @@
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
     <meta name="theme-color" content="#16271f">
     <title>Horn of Gondor Signal Report</title>
-    <link rel="stylesheet" href="/styles.css?v=1">
-    <script src="/app.js?v=1" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=2">
+    <script src="/app.js?v=2" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -125,6 +125,14 @@
         <p id="chart-detail" class="chart-detail" aria-live="polite">
           Each bar shows one detected transmission.
         </p>
+        <div id="chart-audio-panel" class="chart-audio-panel" hidden>
+          <audio
+            id="chart-audio"
+            controls
+            preload="metadata"
+          ></audio>
+          <p id="chart-audio-note" class="chart-audio-note"></p>
+        </div>
       </section>
     </main>
 

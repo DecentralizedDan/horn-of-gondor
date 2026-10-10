@@ -52,6 +52,12 @@
     "databasePath": "./data/receiver.sqlite",
     "retentionDays": 180
   },
+  "recording": {
+    "enabled": false,
+    "retentionDays": 1,
+    "maximumDurationSeconds": 10,
+    "directory": "./data/audio"
+  },
   "cloud": {
     "enabled": false,
     "apiBaseUrl": "http://localhost:8787",

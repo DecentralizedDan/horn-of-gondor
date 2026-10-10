@@ -9,7 +9,9 @@ The MVP has two goals:
 1. Show whether a transmission reached the home receiver.
 2. Provide repeatable relative measurements for comparing HTs, antennas, and other test conditions.
 
-It is a receive-only system. It does not transmit, record audio, or attempt to identify the transmitting station.
+It is a receive-only system. It does not transmit or attempt to identify the
+transmitting station. It records a short opening audio excerpt for public
+playback.
 
 ## Receiver Hardware
 
@@ -40,6 +42,7 @@ A ham HT and DigiRig Mobile are available, but the RTL-SDR is the preferred rece
   - Minimum transmission duration
   - End-of-transmission grace period
   - Data-retention period
+  - Audio enabled state, maximum excerpt duration, and retention period
   - Cloud endpoint and authentication credentials
 - Disable automatic gain control and use fixed gain so measurements remain comparable.
 - Use channelized raw IQ from `rtl_fm` at 48 kHz and calculate one relative
@@ -87,6 +90,9 @@ threshold plus score range would exceed 0 dBFS.
 - Avoid losing an accepted transmission if the cloud service is temporarily unavailable.
 - Retain history for 180 days by default.
 - Allow the retention period to be changed in the Pi's JSON configuration.
+- Queue WAV preparation and upload state alongside each event.
+- Upload audio before event metadata so a displayed result is immediately
+  playable, then remove the successfully published local WAV.
 
 ## Cloud Service
 
@@ -97,7 +103,24 @@ threshold plus score range would exceed 0 dBFS.
 - Do not require inbound connections or open router ports on the home network.
 - Use a Cloudflare-provided public URL initially; a custom domain is not required.
 - Support one receiver for the MVP.
-- Store no audio or receiver-location data.
+- Store no receiver-location data.
+- Store audio clips in Cloudflare R2, not D1.
+- Retain audio for one day by default, independently of result history.
+
+## Audio Recording and Playback
+
+- Record mono FM audio from the same RTL-SDR IQ stream used for measurement.
+- Use 16 kHz PCM WAV to avoid a separate encoder on the Raspberry Pi.
+- Capture only the opening portion of a transmission, defaulting to 10 seconds.
+- Make the maximum excerpt duration configurable from 1 through 30 seconds.
+- Trim the final 250 ms from complete recordings shorter than the configured
+  maximum, but do not trim capped excerpts.
+- Apply short edge fades, RMS normalization, and a soft peak limiter before
+  writing the WAV.
+- Do not delay power measurement or transmission detection while writing WAVs.
+- Preserve the signal measurement if audio preparation or upload is
+  permanently rejected.
+- Clean up expired and orphaned cloud audio objects daily.
 
 ## Public Website
 
@@ -118,6 +141,10 @@ threshold plus score range would exceed 0 dBFS.
 - Update after the next poll following a completed transmission.
 - Include a manual refresh control.
 - Display stored UTC timestamps in the viewer's local timezone.
+- Make each chart bar selectable.
+- Show native browser audio controls when playback is available.
+- State whether playback contains the complete transmission or only its
+  opening excerpt.
 - Provide no administrative or receiver-configuration functions.
 - Ask standards-compliant crawlers not to index, follow, archive, or scrape
   the site using `robots.txt`, HTML metadata, and HTTP headers. Treat these as
@@ -148,7 +175,8 @@ threshold plus score range would exceed 0 dBFS.
 ## MVP Exclusions
 
 - Calibrated S-meter readings
-- Audio recording, storage, streaming, or playback
+- Unbounded or archival full-transmission audio recording
+- Live audio streaming
 - Voice transcription or content analysis
 - Transmitter identification
 - Equipment or antenna labels

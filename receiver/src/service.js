@@ -8,6 +8,7 @@ export class ReceiverService {
     source,
     store,
     uploader = null,
+    recorder = null,
     receiverVersion,
     logger = console,
     now = Date.now,
@@ -16,6 +17,7 @@ export class ReceiverService {
     this.source = source;
     this.store = store;
     this.uploader = uploader;
+    this.recorder = recorder;
     this.receiverVersion = receiverVersion;
     this.logger = logger;
     this.now = now;
@@ -34,9 +36,17 @@ export class ReceiverService {
     let nextRetentionAt = this.now();
     let uploadPromise = null;
 
+    if (this.recorder) {
+      await this.recorder.recover();
+    }
+
     const retentionSyncPromise = this.uploader
       ? this.uploader
-          .syncRetention(this.config.storage.retentionDays, signal)
+          .syncRetention(
+            this.config.storage.retentionDays,
+            this.config.recording?.retentionDays ?? 1,
+            signal,
+          )
           .catch((error) => {
             if (!signal?.aborted) {
               this.logger.warn(
@@ -62,8 +72,22 @@ export class ReceiverService {
     };
 
     for await (const sample of this.source.samples({ signal })) {
+      const wasActive = detector.isActive;
+      if (wasActive && this.recorder) {
+        this.recorder.append(sample.audioPcm);
+      }
       const event = detector.addSample(sample);
-      if (event) {
+      if (!wasActive && detector.isActive && this.recorder) {
+        this.recorder.start(detector.activeEventId);
+        this.recorder.append(sample.audioPcm);
+      }
+      if (wasActive && !detector.isActive && this.recorder) {
+        if (event) {
+          this.record(event);
+        } else {
+          this.recorder.cancel();
+        }
+      } else if (event) {
         this.record(event);
       }
 
@@ -81,6 +105,11 @@ export class ReceiverService {
     const finalEvent = detector.flush();
     if (finalEvent) {
       this.record(finalEvent);
+    } else {
+      this.recorder?.cancel();
+    }
+    if (this.recorder) {
+      await this.recorder.waitForPendingWrites();
     }
 
     if (this.uploader) {
@@ -100,7 +129,10 @@ export class ReceiverService {
   }
 
   record(event) {
-    if (this.store.save(event)) {
+    const saved = this.recorder
+      ? this.recorder.finish(event)
+      : this.store.save(event);
+    if (saved) {
       this.logger.info(
         `Detected transmission ${event.eventId}: ${event.durationMs} ms, peak ${event.peakDbfs} dBFS, score ${event.score}`,
       );

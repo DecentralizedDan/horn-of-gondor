@@ -18,6 +18,8 @@ For a fresh cloud-and-Pi deployment, see
 - Threshold-based transmission detection
 - Configurable minimum duration and end grace period
 - Peak, average, duration, and relative-score calculation
+- Bounded 16 kHz mono PCM WAV capture from FM IQ
+- Audio-first cloud delivery so published events are immediately playable
 - Local SQLite storage
 - Idempotent cloud uploads
 - Exponential retry backoff
@@ -51,7 +53,19 @@ Important receiver settings include:
 - `detection.minimumDurationMs`: Minimum accepted transmission duration
 - `detection.endGraceMs`: Below-threshold time that ends a transmission
 - `storage.retentionDays`: Local and cloud history retention
+- `recording.enabled`: Capture and upload transmission audio
+- `recording.retentionDays`: Audio retention, defaulting to one day
+- `recording.maximumDurationSeconds`: Maximum opening excerpt, defaulting to 10 seconds
+- `recording.directory`: Temporary local WAV directory
 - `cloud.apiBaseUrl`: Deployed Cloudflare service
+
+Recording requires the `rtl_fm` source. The configured RTL sample rate must be
+a multiple of 16 kHz; the tested 48 kHz setting produces 16 kHz mono WAV
+audio. WAV files are uploaded before event metadata and deleted locally after
+successful publication. An interrupted upload remains queued in SQLite.
+Complete recordings have their final 250 ms trimmed to suppress the squelch
+tail; capped excerpts are not trimmed. Clips also receive 20 ms edge fades and
+are normalized toward -18 dBFS RMS with a -1 dBFS soft limiter.
 
 The upload token may be stored in `config.json`, but the recommended approach
 is an environment variable:
@@ -120,6 +134,25 @@ The initial configuration uses:
 
 Confirm that the selected frequency is appropriate for local simplex use
 before transmitting.
+
+To enable the default ten-second audio excerpt:
+
+```json
+"recording": {
+  "enabled": true,
+  "retentionDays": 1,
+  "maximumDurationSeconds": 10,
+  "directory": "./data/audio"
+}
+```
+
+Audio adds roughly 32 KB per recorded second. On a Raspberry Pi 3 B+, monitor
+CPU temperature and throttling during initial field tests:
+
+```sh
+vcgencmd measure_temp
+vcgencmd get_throttled
+```
 
 ## Calibrate the Noise Threshold
 

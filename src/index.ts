@@ -2,6 +2,7 @@ import {
   decodeCursor,
   deleteExpiredTransmissions,
   getLatestTransmission,
+  getTransmissionById,
   insertTransmission,
   listTransmissions,
   updateRetention,
@@ -10,6 +11,9 @@ import type { ApiError, Env } from "./types";
 import { validateSettings, validateTransmission } from "./validation";
 
 const MAX_BODY_BYTES = 16 * 1024;
+const MAX_AUDIO_BYTES = 2 * 1_024 * 1_024;
+const UUID_V4 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PUBLIC_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Cache-Control": "public, max-age=0, s-maxage=5",
@@ -165,6 +169,23 @@ async function createTransmission(
     });
   }
 
+  if (validation.value.audioAvailable) {
+    const audio = await env.AUDIO.head(
+      `audio/${validation.value.eventId}.wav`,
+    );
+    if (
+      !audio ||
+      audio.size !== validation.value.audioSizeBytes ||
+      audio.httpMetadata?.contentType !== "audio/wav"
+    ) {
+      return errorResponse(400, {
+        code: "audio_not_found",
+        message:
+          "The referenced audio must be uploaded before its transmission.",
+      });
+    }
+  }
+
   const result = await insertTransmission(env.DB, validation.value);
   if (result.outcome === "conflict") {
     return errorResponse(409, {
@@ -192,7 +213,7 @@ async function latestTransmission(
 ): Promise<Response> {
   const transmission = await getLatestTransmission(env.DB);
   const etag = transmission
-    ? `"${transmission.eventId}:${transmission.receivedAt}"`
+    ? `"${transmission.eventId}:${transmission.receivedAt}:${transmission.audioAvailable ? 1 : 0}"`
     : '"empty"';
 
   if (request.headers.get("If-None-Match") === etag) {
@@ -322,12 +343,126 @@ async function updateSettings(
   const settings = await updateRetention(
     env.DB,
     validation.value.retentionDays,
+    validation.value.audioRetentionDays,
   );
   return jsonResponse(
     { data: settings },
     200,
     { "Cache-Control": "no-store" },
   );
+}
+
+async function uploadTransmissionAudio(
+  request: Request,
+  env: Env,
+  eventId: string,
+): Promise<Response> {
+  const authenticationError = await requireAuthentication(request, env);
+  if (authenticationError) {
+    return authenticationError;
+  }
+  if (!UUID_V4.test(eventId)) {
+    return errorResponse(400, {
+      code: "validation_error",
+      message: "The event ID must be a UUID v4.",
+    });
+  }
+  const contentType = request.headers
+    .get("Content-Type")
+    ?.split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (contentType !== "audio/wav") {
+    return errorResponse(400, {
+      code: "validation_error",
+      message: 'Audio uploads must use Content-Type "audio/wav".',
+    });
+  }
+  const declaredLength = Number.parseInt(
+    request.headers.get("Content-Length") ?? "0",
+    10,
+  );
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_AUDIO_BYTES
+  ) {
+    return errorResponse(413, {
+      code: "payload_too_large",
+      message: "Audio must not exceed 2 MiB.",
+    });
+  }
+
+  const audio = await request.arrayBuffer();
+  if (audio.byteLength < 44 || audio.byteLength > MAX_AUDIO_BYTES) {
+    return errorResponse(audio.byteLength > MAX_AUDIO_BYTES ? 413 : 400, {
+      code:
+        audio.byteLength > MAX_AUDIO_BYTES
+          ? "payload_too_large"
+          : "validation_error",
+      message:
+        audio.byteLength > MAX_AUDIO_BYTES
+          ? "Audio must not exceed 2 MiB."
+          : "Audio must contain a valid WAV header.",
+    });
+  }
+  const header = new Uint8Array(audio, 0, 12);
+  const signature = new TextDecoder().decode(header);
+  if (
+    signature.slice(0, 4) !== "RIFF" ||
+    signature.slice(8, 12) !== "WAVE"
+  ) {
+    return errorResponse(400, {
+      code: "validation_error",
+      message: "Audio must contain a valid WAV header.",
+    });
+  }
+
+  await env.AUDIO.put(`audio/${eventId}.wav`, audio, {
+    httpMetadata: { contentType: "audio/wav" },
+  });
+  return jsonResponse(
+    { data: { eventId, sizeBytes: audio.byteLength } },
+    201,
+    { "Cache-Control": "no-store" },
+  );
+}
+
+async function transmissionAudio(
+  env: Env,
+  eventId: string,
+): Promise<Response> {
+  if (!UUID_V4.test(eventId)) {
+    return errorResponse(404, {
+      code: "not_found",
+      message: "The requested audio does not exist.",
+    });
+  }
+  const transmission = await getTransmissionById(env.DB, eventId);
+  if (!transmission?.audioAvailable) {
+    return errorResponse(404, {
+      code: "not_found",
+      message: "The requested audio does not exist.",
+    });
+  }
+  const audio = await env.AUDIO.get(`audio/${eventId}.wav`);
+  if (!audio) {
+    return errorResponse(404, {
+      code: "not_found",
+      message: "The requested audio does not exist.",
+    });
+  }
+
+  return new Response(audio.body, {
+    status: 200,
+    headers: {
+      ...SECURITY_HEADERS,
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "public, max-age=300",
+      "Content-Length": String(audio.size),
+      "Content-Type": "audio/wav",
+      ETag: audio.httpEtag,
+    },
+  });
 }
 
 function methodNotAllowed(allowed: string): Response {
@@ -364,6 +499,19 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     return request.method === "PUT"
       ? updateSettings(request, env)
       : methodNotAllowed("PUT");
+  }
+
+  const audioMatch = pathname.match(
+    /^\/api\/v1\/transmissions\/([0-9a-f-]+)\/audio$/,
+  );
+  if (audioMatch) {
+    if (request.method === "GET") {
+      return transmissionAudio(env, audioMatch[1]);
+    }
+    if (request.method === "PUT") {
+      return uploadTransmissionAudio(request, env, audioMatch[1]);
+    }
+    return methodNotAllowed("GET, PUT");
   }
 
   return errorResponse(

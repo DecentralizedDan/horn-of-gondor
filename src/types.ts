@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  AUDIO: R2Bucket;
   INGEST_TOKEN: string;
 }
 
@@ -14,6 +15,10 @@ export interface TransmissionInput {
   gainDb: number;
   thresholdDbfs: number;
   receiverVersion: string;
+  audioAvailable?: boolean;
+  audioContentType?: string | null;
+  audioSizeBytes?: number | null;
+  audioDurationMs?: number | null;
 }
 
 export interface Transmission extends TransmissionInput {
@@ -31,6 +36,10 @@ export interface TransmissionRow {
   gain_db: number;
   threshold_dbfs: number;
   receiver_version: string;
+  audio_available: number;
+  audio_content_type: string | null;
+  audio_size_bytes: number | null;
+  audio_duration_ms: number | null;
   received_at_ms: number;
 }
 

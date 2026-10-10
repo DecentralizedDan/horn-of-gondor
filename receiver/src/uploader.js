@@ -1,3 +1,5 @@
+import { readFile, unlink } from "node:fs/promises";
+
 const PERMANENT_EVENT_STATUSES = new Set([400, 409, 413]);
 const AUTHENTICATION_STATUSES = new Set([401, 403]);
 
@@ -42,11 +44,11 @@ export class UploadClient {
     return signal ? AbortSignal.any([signal, timeout]) : timeout;
   }
 
-  async syncRetention(retentionDays, signal) {
+  async syncRetention(retentionDays, audioRetentionDays = 1, signal) {
     const response = await this.fetch(`${this.apiBaseUrl}/api/v1/settings`, {
       method: "PUT",
       headers: this.headers(),
-      body: JSON.stringify({ retentionDays }),
+      body: JSON.stringify({ retentionDays, audioRetentionDays }),
       signal: this.requestSignal(signal),
     });
 
@@ -78,9 +80,56 @@ export class UploadClient {
       deferred: 0,
     };
 
+    eventLoop:
     for (const [index, queuedEvent] of queued.entries()) {
-      const { event, attempts } = queuedEvent;
+      const { event, attempts, audio } = queuedEvent;
       try {
+        if (audio.state === "ready") {
+          const audioBody = await readFile(audio.path);
+          const audioResponse = await this.fetch(
+            `${this.apiBaseUrl}/api/v1/transmissions/${event.eventId}/audio`,
+            {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${this.uploadToken}`,
+                "Content-Type": audio.contentType,
+                "Content-Length": String(audioBody.length),
+              },
+              body: audioBody,
+              signal: this.requestSignal(signal),
+            },
+          );
+          if (audioResponse.ok) {
+            await audioResponse.arrayBuffer();
+            this.store.markAudioUploaded(event.eventId);
+            event.audioAvailable = true;
+            event.audioContentType = audio.contentType;
+            event.audioSizeBytes = audio.sizeBytes;
+            event.audioDurationMs = audio.durationMs;
+          } else {
+            const message = await responseMessage(audioResponse);
+            if (AUTHENTICATION_STATUSES.has(audioResponse.status)) {
+              this.authenticationPaused = true;
+              summary.attempted = index + 1;
+              summary.deferred += queued.length - index;
+              this.logger.error(
+                "Cloud authentication failed; uploads are paused until the receiver restarts.",
+              );
+              break;
+            }
+            if (PERMANENT_EVENT_STATUSES.has(audioResponse.status)) {
+              this.store.discardAudio(event.eventId);
+              this.logger.error(
+                `Cloud rejected audio for ${event.eventId}; uploading measurements without playback: ${message}`,
+              );
+            } else {
+              this.defer(event.eventId, attempts, message, now);
+              summary.deferred += 1;
+              continue eventLoop;
+            }
+          }
+        }
+
         const response = await this.fetch(
           `${this.apiBaseUrl}/api/v1/transmissions`,
           {
@@ -94,6 +143,16 @@ export class UploadClient {
         if (response.ok) {
           await response.arrayBuffer();
           this.store.markUploaded(event.eventId, now);
+          if (audio.path) {
+            await unlink(audio.path).catch((error) => {
+              if (error.code !== "ENOENT") {
+                this.logger.warn(
+                  `Unable to delete uploaded audio ${audio.path}: ${error.message}`,
+                );
+              }
+            });
+            this.store.clearAudioPath(event.eventId);
+          }
           summary.uploaded += 1;
           continue;
         }

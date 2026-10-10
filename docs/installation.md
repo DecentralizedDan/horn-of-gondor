@@ -48,7 +48,17 @@ npx wrangler d1 create horn-of-gondor
 ```
 
 Copy the returned database ID into `wrangler.jsonc` as the
-`d1_databases[0].database_id` value. Then apply the database migration:
+`d1_databases[0].database_id` value. In the Cloudflare dashboard, open **R2
+Object Storage** and enable R2 for the account if it has not previously been
+activated. Wrangler cannot create the bucket until R2 is enabled.
+
+Create the R2 bucket used for audio:
+
+```sh
+npx wrangler r2 bucket create horn-of-gondor-audio
+```
+
+Apply all database migrations:
 
 ```sh
 npm run db:migrate:remote
@@ -80,6 +90,20 @@ curl https://YOUR-WORKER-URL/api/v1/transmissions/latest
 ```
 
 Before the first transmission, `{"data":null}` is expected.
+
+For an existing deployment receiving the audio feature, first enable R2 in the
+Cloudflare account, then run these commands in this order:
+
+```sh
+npx wrangler r2 bucket create horn-of-gondor-audio
+npm run db:migrate:remote
+npm run deploy
+```
+
+If deployment reports Cloudflare error `10085` and says that
+`horn-of-gondor-audio` was not found, the R2 bucket was not created in the
+active Cloudflare account. Create it with the first command above, then repeat
+the migration and deployment.
 
 ## 3. Install Raspberry Pi Prerequisites
 
@@ -126,9 +150,16 @@ Configure at least:
 - `cloud.apiBaseUrl`: the deployed Cloudflare URL
 - `cloud.uploadToken`: leave empty; the service installer stores it separately
 - `storage.retentionDays`: local and cloud retention period
+- `recording.enabled`: set to `true` to capture and publish audio
+- `recording.retentionDays`: audio retention period; defaults to `1`
+- `recording.maximumDurationSeconds`: opening excerpt length; defaults to `10`
+- `recording.directory`: temporary local WAV directory
 
 The `source.synthetic` object may be removed when `source.type` is
 `"rtl_fm"`. `radio.ppmError` is optional and defaults to zero.
+Recording requires the `rtl_fm` source and a sample rate divisible by 16 kHz.
+The tested 48 kHz source produces 16 kHz mono PCM WAV clips. A ten-second clip
+is approximately 320 KB.
 
 The initial RTL source settings are:
 
@@ -188,7 +219,19 @@ node src/cli.js --config config.json
 
 Make a lawful identified test transmission lasting at least two seconds, then
 release PTT. Confirm the receiver reports the completed event and that it
-appears on the website.
+appears on the website. Select its chart bar and confirm that the audio player
+appears, labels the clip as complete or as an opening excerpt, and plays the
+received FM audio.
+
+During the first sustained test on a Raspberry Pi 3 B+, also check:
+
+```sh
+vcgencmd measure_temp
+vcgencmd get_throttled
+```
+
+Test back-to-back transmissions and inspect the receiver log for RTL-SDR
+restarts, lost samples, failed audio preparation, or deferred uploads.
 
 Stop the foreground receiver with `Ctrl+C` before installing the service.
 
@@ -260,11 +303,14 @@ sudo systemctl restart horn-of-gondor-receiver
 ```
 
 The private `receiver/config.json`, receiver database, and service environment
-file are not tracked by Git.
+file are not tracked by Git. Local WAV files are temporary and are removed
+after successful cloud publication.
 
 ## Security and Radio Notes
 
 - The website is intentionally public and read-only.
+- Transmission audio is public to anyone who can access the website until its
+  independently configured retention period expires.
 - `robots.txt`, HTML metadata, and response headers ask bots not to index the
   site, but these controls are advisory and are not access control.
 - Never commit `.dev.vars`, `receiver/config.json`, or either upload-token

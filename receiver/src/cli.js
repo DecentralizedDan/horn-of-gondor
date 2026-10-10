@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
 import { loadConfig } from "./config.js";
+import { AUDIO_SAMPLE_RATE_HZ } from "./fm-audio.js";
+import { AudioRecorder } from "./audio-recorder.js";
 import { RtlFmSignalSource } from "./rtl-fm-source.js";
 import { ReceiverService } from "./service.js";
 import { EventStore } from "./store.js";
 import { SyntheticSignalSource } from "./synthetic-source.js";
 import { UploadClient } from "./uploader.js";
 
-const RECEIVER_VERSION = "0.2.0";
+const RECEIVER_VERSION = "0.3.0";
 
 function usage() {
   return `Usage: node src/cli.js --config <path> [--once]
@@ -73,6 +75,9 @@ function createSource(config, arguments_) {
     ...config.source.rtlFm,
     sampleIntervalMs: config.source.sampleIntervalMs,
     radio: config.radio,
+    audioSampleRateHz: config.recording.enabled
+      ? AUDIO_SAMPLE_RATE_HZ
+      : null,
   });
 }
 
@@ -147,11 +152,18 @@ async function main() {
         store,
       })
     : null;
+  const recorder = config.recording.enabled
+    ? new AudioRecorder({
+        ...config.recording,
+        store,
+      })
+    : null;
   const service = new ReceiverService({
     config,
     source,
     store,
     uploader,
+    recorder,
     receiverVersion: RECEIVER_VERSION,
   });
 

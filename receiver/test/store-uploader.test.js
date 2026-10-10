@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { EventStore } from "../src/store.js";
 import { UploadClient } from "../src/uploader.js";
@@ -89,7 +92,10 @@ test("uploads pending events and synchronizes retention", async () => {
       rejected: 0,
     });
     assert.equal(requests[0].url, "https://example.com/api/v1/settings");
-    assert.deepEqual(requests[0].body, { retentionDays: 180 });
+    assert.deepEqual(requests[0].body, {
+      retentionDays: 180,
+      audioRetentionDays: 1,
+    });
     assert.equal(
       requests[1].url,
       "https://example.com/api/v1/transmissions",
@@ -173,5 +179,58 @@ test("pauses uploads after an authentication failure without discarding events",
     });
   } finally {
     store.close();
+  }
+});
+
+test("uploads audio before publishing its transmission", async () => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "horn-of-gondor-upload-"),
+  );
+  const audioPath = path.join(directory, `${event().eventId}.wav`);
+  const audio = Buffer.alloc(32_044);
+  audio.write("RIFF", 0);
+  audio.write("WAVE", 8);
+  await writeFile(audioPath, audio);
+
+  const store = new EventStore(":memory:");
+  store.save(event(), {
+    audioPath,
+    audioState: "preparing",
+    audioContentType: "audio/wav",
+    audioSizeBytes: audio.length,
+    audioDurationMs: 1_000,
+  });
+  store.markAudioReady(event().eventId);
+  const requests = [];
+  const client = new UploadClient({
+    apiBaseUrl: "https://example.com",
+    uploadToken: "test-token-with-at-least-32-characters",
+    requestTimeoutMs: 10_000,
+    store,
+    logger: quietLogger,
+    fetchImplementation: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        body:
+          options.headers["Content-Type"] === "application/json"
+            ? JSON.parse(options.body)
+            : options.body,
+      });
+      return Response.json({ data: {} }, { status: 201 });
+    },
+  });
+
+  try {
+    const summary = await client.uploadPending(25);
+    assert.equal(summary.uploaded, 1);
+    assert.match(requests[0].url, /\/audio$/);
+    assert.equal(requests[0].method, "PUT");
+    assert.equal(requests[1].body.audioAvailable, true);
+    assert.equal(requests[1].body.audioDurationMs, 1_000);
+    await assert.rejects(access(audioPath), /ENOENT/);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });
