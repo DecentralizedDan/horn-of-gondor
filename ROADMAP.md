@@ -91,6 +91,8 @@ Implemented:
 
 - Demodulate 16 kHz mono FM audio while measuring the RTL-SDR IQ stream.
 - Keep only the configurable opening excerpt, defaulting to ten seconds.
+- Remove the first 200 ms from every recording to suppress the opening static
+  burst.
 - Trim the final 250 ms from complete recordings to suppress the receiver
   squelch “kerchunk,” while leaving capped excerpts at their full length.
 - Apply short edge fades and normalize clips to approximately -18 dBFS RMS
@@ -118,3 +120,16 @@ Remaining:
 - Accept the configured receive frequency in MHz instead of requiring integer
   hertz. Replace `radio.frequencyHz` with `radio.frequencyMhz`; for example,
   configure 145 MHz as `145.000`.
+
+## Future Project and Contributor Improvements
+
+- Add an AI-assisted contribution policy to `CONTRIBUTING.md`.
+- Require contributors to understand, review, test, and take responsibility
+  for all submitted code, including AI-generated code.
+- Require disclosure when AI materially contributed to a pull request.
+- Do not accept unreviewed AI output, fabricated test results, or generated
+  dependencies and licenses whose provenance has not been verified.
+- Never provide secrets, private configuration, unpublished recordings, or
+  other sensitive project data to an AI service.
+- Hold AI-assisted contributions to the same testing, documentation,
+  security, licensing, and radio-compliance standards as other contributions.

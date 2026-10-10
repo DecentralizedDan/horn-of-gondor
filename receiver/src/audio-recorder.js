@@ -12,6 +12,7 @@ import {
   createWaveFile,
 } from "./fm-audio.js";
 
+const RECORDING_HEAD_TRIM_MS = 200;
 const COMPLETE_RECORDING_TAIL_TRIM_MS = 250;
 const EDGE_FADE_MS = 20;
 const TARGET_RMS_DBFS = -18;
@@ -140,15 +141,27 @@ export class AudioRecorder {
       this.maximumDurationMs,
     );
     const isCompleteRecording = event.durationMs < this.maximumDurationMs;
+    const headTrimMs = Math.min(
+      RECORDING_HEAD_TRIM_MS,
+      capturedDurationMs,
+    );
     const desiredDurationMs =
       capturedDurationMs -
+      headTrimMs -
       (isCompleteRecording ? COMPLETE_RECORDING_TAIL_TRIM_MS : 0);
+    const startOffset = Math.round(
+      (headTrimMs * this.sampleRateHz * 2) / 1_000,
+    );
     const desiredBytes = Math.min(
-      capture.byteLength,
+      capture.byteLength - startOffset,
       Math.round((desiredDurationMs * this.sampleRateHz * 2) / 1_000),
     );
+    const capturedPcm = Buffer.concat(
+      capture.buffers,
+      capture.byteLength,
+    );
     const pcm = Buffer.from(
-      Buffer.concat(capture.buffers, capture.byteLength).subarray(0, desiredBytes),
+      capturedPcm.subarray(startOffset, startOffset + desiredBytes),
     );
     applyEdgeFades(pcm, this.sampleRateHz);
     const normalizedPcm = normalizePcm(pcm);

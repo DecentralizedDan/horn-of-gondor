@@ -63,9 +63,11 @@ Recording requires the `rtl_fm` source. The configured RTL sample rate must be
 a multiple of 16 kHz; the tested 48 kHz setting produces 16 kHz mono WAV
 audio. WAV files are uploaded before event metadata and deleted locally after
 successful publication. An interrupted upload remains queued in SQLite.
-Complete recordings have their final 250 ms trimmed to suppress the squelch
-tail; capped excerpts are not trimmed. Clips also receive 20 ms edge fades and
-are normalized toward -18 dBFS RMS with a -1 dBFS soft limiter.
+All recordings have their first 200 ms removed to suppress the receiver's
+opening static burst. Complete recordings also have their final 250 ms trimmed
+to suppress the squelch tail; capped excerpts are not trimmed at the end.
+Clips then receive 20 ms edge fades and are normalized toward -18 dBFS RMS
+with a -1 dBFS soft limiter.
 
 The upload token may be stored in `config.json`, but the recommended approach
 is an environment variable:

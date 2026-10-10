@@ -113,6 +113,8 @@ threshold plus score range would exceed 0 dBFS.
 - Use 16 kHz PCM WAV to avoid a separate encoder on the Raspberry Pi.
 - Capture only the opening portion of a transmission, defaulting to 10 seconds.
 - Make the maximum excerpt duration configurable from 1 through 30 seconds.
+- Remove the first 200 ms from every recording to suppress the receiver's
+  opening static burst.
 - Trim the final 250 ms from complete recordings shorter than the configured
   maximum, but do not trim capped excerpts.
 - Apply short edge fades, RMS normalization, and a soft peak limiter before

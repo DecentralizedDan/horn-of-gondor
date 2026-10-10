@@ -22,10 +22,6 @@
 		{
 			"binding": "AUDIO",
 			"bucket_name": "horn-of-gondor-audio"
-		},
-		{
-			"bucket_name": "horn-of-gondor-audio",
-			"binding": "horn_of_gondor_audio"
 		}
 	],
 	"triggers": {

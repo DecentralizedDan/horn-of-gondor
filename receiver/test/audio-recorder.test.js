@@ -54,12 +54,12 @@ test("writes a bounded WAV clip and unblocks its queued event", async () => {
     await recorder.waitForPendingWrites();
     const [queued] = store.pending(10);
     assert.equal(queued.audio.state, "ready");
-    assert.equal(queued.audio.durationMs, 1_000);
-    assert.equal(queued.audio.sizeBytes, 32_044);
+    assert.equal(queued.audio.durationMs, 800);
+    assert.equal(queued.audio.sizeBytes, 25_644);
 
     const wave = await readFile(queued.audio.path);
     assert.equal(wave.toString("ascii", 0, 4), "RIFF");
-    assert.equal(wave.length, 32_044);
+    assert.equal(wave.length, 25_644);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
@@ -80,6 +80,9 @@ test("trims, fades, and normalizes a complete recording", async () => {
 
   try {
     const pcm = sinePcm(2_000);
+    for (let offset = 0; offset < 6_400; offset += 2) {
+      pcm.writeInt16LE(32_767, offset);
+    }
     for (let offset = pcm.length - 8_000; offset < pcm.length; offset += 2) {
       pcm.writeInt16LE(32_767, offset);
     }
@@ -89,8 +92,8 @@ test("trims, fades, and normalizes a complete recording", async () => {
 
     await recorder.waitForPendingWrites();
     const [queued] = store.pending(10);
-    assert.equal(queued.audio.durationMs, 1_750);
-    assert.equal(queued.audio.sizeBytes, 56_044);
+    assert.equal(queued.audio.durationMs, 1_550);
+    assert.equal(queued.audio.sizeBytes, 49_644);
 
     const wave = await readFile(queued.audio.path);
     const samples = new Int16Array(
