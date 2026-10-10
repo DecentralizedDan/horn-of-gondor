@@ -45,7 +45,7 @@ Status: Complete
 Status: Complete
 
 - Install and verify RTL-SDR support on the Raspberry Pi 3 Model B+.
-- Configure frequency and fixed tuner gain.
+- Configure receive frequency in human-readable MHz and use fixed tuner gain.
 - Disable automatic gain control.
 - Measure channel power in dBFS.
 - Establish the local noise threshold.
@@ -117,12 +117,6 @@ Remaining:
 - Test back-to-back transmissions, offline audio queues, and one-day cleanup.
 - Revisit compressed audio only if measured R2 egress or storage warrants the
   additional Pi CPU and deployment complexity.
-
-## Future Quality-of-Life Improvements
-
-- Accept the configured receive frequency in MHz instead of requiring integer
-  hertz. Replace `radio.frequencyHz` with `radio.frequencyMhz`; for example,
-  configure 145 MHz as `145.000`.
 
 ## Future Project and Contributor Improvements
 

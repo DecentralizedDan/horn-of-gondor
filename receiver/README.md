@@ -42,7 +42,8 @@ unlike the website's public `public/config.json`.
 
 Important receiver settings include:
 
-- `radio.frequencyHz`: VHF receive frequency
+- `radio.frequencyMhz`: VHF receive frequency in MHz; accepts integer or
+  decimal JSON numbers such as `145` or `145.5`
 - `radio.gainDb`: Fixed RTL-SDR tuner gain
 - `radio.ppmError`: RTL-SDR frequency correction
 - `source.rtlFm.sampleRateHz`: Channelized IQ sample rate

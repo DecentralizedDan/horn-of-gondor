@@ -139,9 +139,9 @@ export function validateConfig(
     if (!integerInRange(input.radio.deviceIndex, 0, 100)) {
       errors.push("radio.deviceIndex must be an integer from 0 through 100.");
     }
-    if (!integerInRange(input.radio.frequencyHz, 144_000_000, 148_000_000)) {
+    if (!numberInRange(input.radio.frequencyMhz, 144, 148)) {
       errors.push(
-        "radio.frequencyHz must be an integer from 144000000 through 148000000.",
+        "radio.frequencyMhz must be a number from 144 through 148.",
       );
     }
     if (!numberInRange(input.radio.gainDb, 0, 60)) {
@@ -339,7 +339,7 @@ export function validateConfig(
     },
     radio: {
       deviceIndex: input.radio.deviceIndex,
-      frequencyHz: input.radio.frequencyHz,
+      frequencyHz: Math.round(input.radio.frequencyMhz * 1_000_000),
       gainDb: input.radio.gainDb,
       ppmError: input.radio.ppmError ?? 0,
     },

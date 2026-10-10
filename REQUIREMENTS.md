@@ -35,7 +35,7 @@ A ham HT and DigiRig Mobile are available, but the RTL-SDR is the preferred rece
 - Do not expose receiver configuration or administrative controls through the public website.
 - Store configuration in a human-editable JSON file on the Pi.
 - Make at least these values configurable:
-  - Receive frequency
+  - Receive frequency as an integer or decimal number in MHz
   - RTL-SDR gain
   - Signal threshold in dBFS
   - Score range in decibels, defaulting to 50 dB

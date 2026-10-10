@@ -144,7 +144,7 @@ vim config.json
 Configure at least:
 
 - `source.type`: set to `"rtl_fm"`
-- `radio.frequencyHz`: receive frequency in integer hertz
+- `radio.frequencyMhz`: receive frequency in MHz, such as `145` or `145.5`
 - `radio.gainDb`: fixed tuner gain; `28` is the initial tested value
 - `cloud.enabled`: set to `true`
 - `cloud.apiBaseUrl`: the deployed Cloudflare URL

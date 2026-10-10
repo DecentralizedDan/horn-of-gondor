@@ -27,6 +27,7 @@ test("validates and normalizes the example configuration", async () => {
   });
 
   assert.equal(config.detection.scoreRangeDb, 50);
+  assert.equal(config.radio.frequencyHz, 146_550_000);
   assert.equal(config.recording.retentionDays, 1);
   assert.equal(config.recording.enabled, false);
   assert.equal(config.recording.maximumDurationSeconds, 10);
@@ -41,6 +42,27 @@ test("validates and normalizes the example configuration", async () => {
   assert.equal(
     config.cloud.uploadToken,
     "test-token-with-at-least-32-characters",
+  );
+});
+
+test("accepts integer and decimal frequencies in MHz", async () => {
+  const input = await exampleConfig();
+
+  input.radio.frequencyMhz = 145;
+  assert.equal(validateConfig(input).radio.frequencyHz, 145_000_000);
+
+  input.radio.frequencyMhz = 145.5;
+  assert.equal(validateConfig(input).radio.frequencyHz, 145_500_000);
+
+  delete input.radio.frequencyMhz;
+  input.radio.frequencyHz = 145_500_000;
+  assert.throws(
+    () => validateConfig(input),
+    (error) =>
+      error instanceof ConfigurationError &&
+      error.details.some((detail) =>
+        detail.includes("radio.frequencyMhz"),
+      ),
   );
 });
 

@@ -38,7 +38,7 @@
   },
   "radio": {
     "deviceIndex": 0,
-    "frequencyHz": 146550000,
+    "frequencyMhz": 146.55,
     "gainDb": 28,
     "ppmError": 0
   },
