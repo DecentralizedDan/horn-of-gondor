@@ -50,6 +50,9 @@ A ham HT and DigiRig Mobile are available, but the RTL-SDR is the preferred rece
 - Restart `rtl_fm` after an unexpected exit and fail clearly after repeated
   startup failures.
 - Treat measurements as relative rather than calibrated S-units.
+- Provide a recalibration script for location, antenna, gain, and RF
+  environment changes. It must print the exact receiver configuration fields
+  and recommended values rather than editing `config.json` automatically.
 
 The operator is responsible for selecting a lawful frequency appropriate to the local band plan and identifying amateur-radio transmissions as required.
 

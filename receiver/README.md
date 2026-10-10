@@ -158,7 +158,38 @@ vcgencmd get_throttled
 
 ## Calibrate the Noise Threshold
 
-With the antenna connected and no deliberate test transmissions:
+Recalibrate after moving the Pi, changing the SDR antenna, changing tuner gain,
+or making another change that affects the local noise floor. Stop the service
+so it releases the RTL-SDR, ensure the configured channel is idle, and run:
+
+```sh
+sudo systemctl stop horn-of-gondor-receiver
+npm run recalibrate
+```
+
+After a 60-second measurement, the command prints only the `config.json`
+fields that should change, for example:
+
+```text
+detection.thresholdDbfs = -38.25
+```
+
+It uses the measured 95th-percentile noise plus a 3 dB margin. Override the
+duration or margin when needed:
+
+```sh
+npm run recalibrate -- --seconds 120 --margin-db 4
+```
+
+Edit `config.json` with `vim`, apply the printed values, then restart:
+
+```sh
+vim config.json
+sudo systemctl start horn-of-gondor-receiver
+sudo journalctl -u horn-of-gondor-receiver -f
+```
+
+For diagnostic one-second summaries instead of an automatic recommendation:
 
 ```sh
 timeout 60 node src/cli.js --config config.json --calibrate
@@ -206,11 +237,13 @@ The installer enables and immediately starts
 
 ```sh
 sudo systemctl status horn-of-gondor-receiver
-sudo systemctl restart horn-of-gondor-receiver
+npm run restart-service
 sudo systemctl stop horn-of-gondor-receiver
 sudo journalctl -u horn-of-gondor-receiver -f
 ```
 
-After changing `config.json`, restart the service to apply the new settings.
+`npm run restart-service` restarts the receiver and prints its full service
+status so startup failures are immediately visible. After changing
+`config.json`, run it to apply the new settings.
 After rotating the cloud token, edit
 `/etc/horn-of-gondor/receiver.env` with `sudo vim` and restart the service.

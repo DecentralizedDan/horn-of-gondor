@@ -11,6 +11,8 @@
   "scripts": {
     "check": "npm test",
     "demo": "node src/cli.js --config config.example.json --once",
+    "recalibrate": "node src/recalibrate.js --config config.json",
+    "restart-service": "bash deploy/restart-service.sh",
     "start": "node src/cli.js --config config.json",
     "test": "node --test"
   },

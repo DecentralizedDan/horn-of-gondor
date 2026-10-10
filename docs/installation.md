@@ -185,12 +185,28 @@ Connect the intended antenna and measure an idle frequency without making a
 test transmission:
 
 ```sh
-timeout 60 node src/cli.js --config config.json --calibrate
+sudo systemctl stop horn-of-gondor-receiver 2>/dev/null || true
+npm run recalibrate
 ```
 
-Calibration prints one-second minimum, median, 95th-percentile, and maximum
-dBFS summaries. Start with `detection.thresholdDbfs` approximately 6 dB above
-the stable noise level.
+The script measures for 60 seconds and prints the exact `config.json` fields
+and values to change. By default it recommends
+`detection.thresholdDbfs` at 3 dB above the measured 95th-percentile noise. If
+that recommendation would make the configured score range invalid, it also
+prints a compatible `detection.scoreRangeDb`.
+
+Apply the values with `vim config.json`. For longer sampling or a different
+noise margin:
+
+```sh
+npm run recalibrate -- --seconds 120 --margin-db 4
+```
+
+After calibration, start the installed service when applicable:
+
+```sh
+sudo systemctl start horn-of-gondor-receiver
+```
 
 The configured `detection.scoreRangeDb` must satisfy:
 
@@ -275,8 +291,12 @@ sudo systemctl status horn-of-gondor-receiver --no-pager
 After changing `config.json`, apply it with:
 
 ```sh
-sudo systemctl restart horn-of-gondor-receiver
+cd ~/horn-of-gondor/receiver
+npm run restart-service
 ```
+
+The restart script uses `sudo`, verifies that the service is installed, and
+prints the full service status after restarting.
 
 Recent logs:
 

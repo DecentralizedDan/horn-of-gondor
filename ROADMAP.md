@@ -78,6 +78,9 @@ Status: In progress; automatic startup verified on the Pi
 - Harden local and cloud error handling.
 - Test retention cleanup locally and in Cloudflare.
 - Document installation, configuration, calibration, operation, and recovery.
+- Provide a recalibration command that measures the idle channel and prints
+  exact `config.json` field/value recommendations after receiver or antenna
+  changes.
 - Add release packaging and versioning.
 
 ## Phase 7 — Transmission Recording and Playback
